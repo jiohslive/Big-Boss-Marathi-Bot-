@@ -49,9 +49,6 @@ async def index_episode(client, message):
 except Exception as e: 
 print("Index Error:", e)
 
-)
-
-
 # ---------------------------------
 # SEARCH HANDLER
 # ---------------------------------
