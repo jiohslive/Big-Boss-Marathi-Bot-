@@ -5,6 +5,8 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pymongo import MongoClient
 from config import *
 
+print("🚀 Starting BBM Bot...")
+
 app = Client(
     "bbm_bot",
     api_id=API_ID,
@@ -16,6 +18,7 @@ mongo = MongoClient(MONGO_URI)
 db = mongo[DB_NAME]
 collection = db["episodes"]
 
+print("✅ Mongo Connected")
 
 # ---------------------------------
 # INDEX CHANNEL POSTS
@@ -41,7 +44,10 @@ async def index_episode(client, message):
             upsert=True
         )
 
-        print(f"Indexed: Episode {episode} {quality}")
+        print(f"✅ Indexed Episode {episode} {quality}")
+
+    except Exception as e:
+        print("Index Error:", e)
 
 
 # ---------------------------------
@@ -82,6 +88,8 @@ async def search_episode(client, message):
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
+  except Exception as e:
+        print("Search Error:", e)
 
 # ---------------------------------
 # QUALITY CLICK HANDLER
@@ -109,6 +117,9 @@ async def send_quality(client, callback_query):
 
     await callback_query.answer("✅ Sending...")
 
+except Exception as e:
+        print("Callback Error:", e)
 
+
+print("🔥 Bot Ready To Run")
 app.run()
-print("BOT STARTED SUCCESSFULLY")
