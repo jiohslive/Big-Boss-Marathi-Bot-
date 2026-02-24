@@ -26,29 +26,32 @@ print("✅ Mongo Connected")
 
 @app.on_message(filters.chat(PRIVATE_CHANNEL_ID) & filters.video)
 async def index_episode(client, message):
-    caption = message.caption or ""
+    try:
+        caption = message.caption or ""
 
-    match = re.search(r"#bbm\s+(\d+)\s+(\d+p)", caption.lower())
-    if match:
-        episode = int(match.group(1))
-        quality = match.group(2)
+        match = re.search(r"#bbm\s+(\d+)\s+(\d+p)", caption.lower())
+        if match:
+            episode = int(match.group(1))
+            quality = match.group(2)
 
-        collection.update_one(
-            {"episode": episode, "quality": quality},
-            {"$set": {
-                "episode": episode,
-                "quality": quality,
-                "message_id": message.id,
-                "channel_id": PRIVATE_CHANNEL_ID
-            }},
-            upsert=True
-        )
+            collection.update_one(
+                {"episode": episode, "quality": quality},
+                {
+                    "$set": {
+                        "episode": episode,
+                        "quality": quality,
+                        "message_id": message.id,
+                        "channel_id": PRIVATE_CHANNEL_ID
+                    }
+                },
+                upsert=True
+            )
 
-        print(f"✅ Indexed Episode {episode} {quality}")
+            print(f"✅ Indexed Episode {episode} {quality}")
 
-except Exception as e: 
-print("Index Error:", e)
-
+    except Exception as e:
+        print("Index Error:", e)
+        
 # ---------------------------------
 # SEARCH HANDLER
 # ---------------------------------
