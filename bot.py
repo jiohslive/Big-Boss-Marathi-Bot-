@@ -46,8 +46,10 @@ async def index_episode(client, message):
 
         print(f"✅ Indexed Episode {episode} {quality}")
 
-    except Exception as e:
-        print("Index Error:", e)
+except Exception as e: 
+print("Index Error:", e)
+
+)
 
 
 # ---------------------------------
