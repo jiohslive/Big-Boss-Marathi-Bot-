@@ -111,3 +111,4 @@ async def send_quality(client, callback_query):
 
 
 app.run()
+print("BOT STARTED SUCCESSFULLY")
