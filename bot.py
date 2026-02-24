@@ -41,11 +41,6 @@ def format_quality_buttons(episode, series, qualities):
         buttons.append([InlineKeyboardButton(q, callback_data=f"q_{episode}_{series}_{q}")])
     return InlineKeyboardMarkup(buttons)
 
-def format_caption(template, series, episode, quality):
-    if not template:
-        template = "🎬 {series} Episode {episode}\n📌 Quality: {quality}"
-    return template.format(series=series.title(), episode=episode, quality=quality)
-
 # ---------------- START ----------------
 @app.on_message(filters.private & filters.command("start"))
 async def start_bot(client, message):
@@ -67,10 +62,9 @@ async def search_episode(client, message):
     await asyncio.sleep(1)
     await search_msg.delete()
 
-    # Extract episode number from any format
     ep_match = re.search(r'\d+', query)
     if not ep_match:
-        await message.reply("❌ Please enter episode number like 44 or S06E44")
+        await message.reply("❌ Enter episode number like 55 or S06E55")
         return
 
     ep_number = int(ep_match.group())
@@ -83,7 +77,7 @@ async def search_episode(client, message):
 
     if not episode:
         await message.reply("❌ Episode not found.")
-        await send_log(f"❌ User searched EP {ep_number} but not found")
+        await send_log(f"❌ Search failed for EP {ep_number}")
         return
 
     await message.reply(
@@ -103,8 +97,7 @@ async def episode_select(client, callback_query):
     })
 
     if not ep_data:
-        await callback_query.message.reply("❌ Episode data missing.")
-        await send_log(f"❌ Episode {episode} missing in DB")
+        await callback_query.message.reply("❌ Episode missing in DB.")
         return
 
     qualities = list(ep_data["qualities"].keys())
@@ -134,24 +127,20 @@ async def quality_select(client, callback_query):
     })
 
     if not ep_data:
-        await callback_query.message.reply("❌ Episode not found in DB.")
+        await callback_query.message.reply("❌ Episode not found.")
         return
 
-    file_id = ep_data["qualities"].get(quality)
+    message_id = ep_data["qualities"].get(quality)
 
-    if not file_id:
+    if not message_id:
         await callback_query.message.reply("❌ Quality not available.")
         return
 
-    caption_template = ep_data.get("caption_template")
-    caption = format_caption(caption_template, series, episode, quality)
-    thumbnail = ep_data.get("thumbnail")
-
-    await callback_query.message.reply_video(
-        file_id,
-        caption=caption,
-        thumb=thumbnail,
-        parse_mode="markdown"
+    # 🔥 Forward video from series channel
+    await app.copy_message(
+        chat_id=callback_query.from_user.id,
+        from_chat_id=SERIES_CHANNEL,
+        message_id=message_id
     )
 
 # ---------------- AUTO EPISODE STORE ----------------
@@ -169,7 +158,6 @@ async def new_episode_monitor(client, message):
 
     ep_number = int(ep_match.group(1))
     series_name = "big boss marathi"
-
     quality = next((q for q in ["480p","720p","1080p"] if q in caption), "480p")
 
     existing = episodes_col.find_one({
@@ -180,19 +168,17 @@ async def new_episode_monitor(client, message):
     if existing:
         episodes_col.update_one(
             {"series": series_name, "episode": ep_number},
-            {"$set": {f"qualities.{quality}": message.video.file_id}}
+            {"$set": {f"qualities.{quality}": message.id}}
         )
     else:
         episodes_col.insert_one({
             "series": series_name,
             "episode": ep_number,
-            "qualities": {quality: message.video.file_id},
-            "caption_template": None,
-            "thumbnail": message.video.thumbs[0].file_id if message.video.thumbs else None,
+            "qualities": {quality: message.id},
             "added_on": datetime.utcnow()
         })
 
-    await send_log(f"📥 Added EP {ep_number} {quality}")
+    await send_log(f"📥 Stored EP {ep_number} {quality}")
 
 # ---------------- RUN ----------------
 if __name__ == "__main__":
