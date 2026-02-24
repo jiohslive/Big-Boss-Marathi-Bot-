@@ -50,7 +50,7 @@ def format_quality_buttons(episode, series, qualities):
 
 def format_caption(template, series, episode, quality, link=None):
     if not template:
-        template = "🎬 {series} S{episode}\n📌 Quality: {quality}"
+        template = "🎬 {series} S{episode}\n📌 Quality: {quality}\n🔗 {link}"
     return template.format(series=series.title(), episode=episode, quality=quality, link=link or "")
 
 # ---------------- BOT START ----------------
@@ -75,7 +75,6 @@ async def search_episode(client, message):
 
     # Multi-series support
     if "s" in query and "e" in query:
-        # Extract episode number
         try:
             ep_number = int("".join(filter(str.isdigit, query.split("e")[1].split()[0])))
         except:
@@ -95,8 +94,7 @@ async def search_episode(client, message):
 async def episode_select(client, callback_query):
     data = callback_query.data.split("_")
     episode = int(data[1])
-    page_info = data[2]  # optional page info
-    await callback_query.message.delete()
+    await callback_query.message.delete()  # Auto-delete episode select message
 
     ep_data = episodes_col.find_one({"episode": episode})
     if not ep_data:
@@ -116,7 +114,7 @@ async def quality_select(client, callback_query):
     episode = int(data[1])
     series = data[2]
     quality = data[3]
-    await callback_query.message.delete()
+    await callback_query.message.delete()  # Auto-delete quality select message
 
     ep_data = episodes_col.find_one({"series": series, "episode": episode})
     file_id = ep_data["qualities"][quality]
