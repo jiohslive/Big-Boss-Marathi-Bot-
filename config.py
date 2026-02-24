@@ -3,11 +3,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_ID = int(os.getenv("API_ID"))
-API_HASH = os.getenv("API_HASH")
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+try:
+    API_ID = int(os.environ["API_ID"])
+    API_HASH = os.environ["API_HASH"]
+    BOT_TOKEN = os.environ["BOT_TOKEN"]
 
-MONGO_URI = os.getenv("MONGO_URI")
-DB_NAME = os.getenv("DB_NAME")
+    MONGO_URI = os.environ["MONGO_URI"]
+    DB_NAME = os.environ["DB_NAME"]
 
-PRIVATE_CHANNEL_ID = int(os.getenv("PRIVATE_CHANNEL_ID"))
+    PRIVATE_CHANNEL_ID = int(os.environ["PRIVATE_CHANNEL_ID"])
+
+    print("✅ ENV LOADED SUCCESSFULLY")
+
+except Exception as e:
+    print("❌ ENV ERROR:", e)
+    raise e
