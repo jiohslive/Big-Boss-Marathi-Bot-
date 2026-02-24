@@ -28,8 +28,8 @@ print("✅ Mongo Connected")
 async def index_episode(client, message):
     try:
         caption = message.caption or ""
-
         match = re.search(r"#bbm\s+(\d+)\s+(\d+p)", caption.lower())
+
         if match:
             episode = int(match.group(1))
             quality = match.group(2)
@@ -51,47 +51,50 @@ async def index_episode(client, message):
 
     except Exception as e:
         print("Index Error:", e)
-        
+
+
 # ---------------------------------
 # SEARCH HANDLER
 # ---------------------------------
 
 @app.on_message(filters.private & filters.text)
 async def search_episode(client, message):
-    text = message.text.lower()
+    try:
+        text = message.text.lower()
 
-    match = re.search(r"(\d+)", text)
-    if not match:
-        return
+        match = re.search(r"(\d+)", text)
+        if not match:
+            return
 
-    episode = int(match.group(1))
+        episode = int(match.group(1))
 
-    search_msg = await message.reply(f"🔍 Searching {text}...")
-    await asyncio.sleep(2)
-    await search_msg.delete()
+        search_msg = await message.reply(f"🔍 Searching {text}...")
+        await asyncio.sleep(2)
+        await search_msg.delete()
 
-    results = list(collection.find({"episode": episode}))
+        results = list(collection.find({"episode": episode}))
 
-    if not results:
-        await message.reply("❌ Episode Not Found")
-        return
+        if not results:
+            await message.reply("❌ Episode Not Found")
+            return
 
-    buttons = []
-    for r in results:
-        buttons.append([
-            InlineKeyboardButton(
-                r["quality"],
-                callback_data=f"get_{episode}_{r['quality']}"
-            )
-        ])
+        buttons = []
+        for r in results:
+            buttons.append([
+                InlineKeyboardButton(
+                    r["quality"],
+                    callback_data=f"get_{episode}_{r['quality']}"
+                )
+            ])
 
-    await message.reply(
-        f"📺 Bigg Boss Marathi\nEpisode {episode} Found\n\nSelect Quality:",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
+        await message.reply(
+            f"📺 Bigg Boss Marathi\nEpisode {episode} Found\n\nSelect Quality:",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
-  except Exception as e:
+    except Exception as e:
         print("Search Error:", e)
+
 
 # ---------------------------------
 # QUALITY CLICK HANDLER
@@ -99,27 +102,28 @@ async def search_episode(client, message):
 
 @app.on_callback_query(filters.regex(r"get_(\d+)_(\d+p)"))
 async def send_quality(client, callback_query):
-    episode = int(callback_query.matches[0].group(1))
-    quality = callback_query.matches[0].group(2)
+    try:
+        episode = int(callback_query.matches[0].group(1))
+        quality = callback_query.matches[0].group(2)
 
-    data = collection.find_one({
-        "episode": episode,
-        "quality": quality
-    })
+        data = collection.find_one({
+            "episode": episode,
+            "quality": quality
+        })
 
-    if not data:
-        await callback_query.answer("File not found!", show_alert=True)
-        return
+        if not data:
+            await callback_query.answer("File not found!", show_alert=True)
+            return
 
-    await client.forward_messages(
-        chat_id=callback_query.from_user.id,
-        from_chat_id=data["channel_id"],
-        message_ids=data["message_id"]
-    )
+        await client.forward_messages(
+            chat_id=callback_query.from_user.id,
+            from_chat_id=data["channel_id"],
+            message_ids=data["message_id"]
+        )
 
-    await callback_query.answer("✅ Sending...")
+        await callback_query.answer("✅ Sending...")
 
-except Exception as e:
+    except Exception as e:
         print("Callback Error:", e)
 
 
