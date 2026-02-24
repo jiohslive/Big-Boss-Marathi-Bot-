@@ -1,12 +1,12 @@
 import os
-import asyncio
 import re
+import asyncio
 from datetime import datetime
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pymongo import MongoClient
 
-# ---------------- ENV VARIABLES ----------------
+# ---------------- ENV ----------------
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -16,136 +16,107 @@ SERIES_CHANNEL = int(os.environ.get("SERIES_CHANNEL"))
 
 # ---------------- INIT ----------------
 mongo = MongoClient(MONGO_URL)
-db = mongo["serial_bot"]
-episodes_col = db["episodes"]
-users_col = db["users"]
+db = mongo["pro_serial_bot"]
+episodes = db["episodes"]
+users = db["users"]
 
-app = Client("serial_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("pro_serial_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# ---------------- HELPERS ----------------
-async def send_log(text):
+# ---------------- LOG ----------------
+async def log(text):
     try:
         await app.send_message(LOG_CHANNEL, text)
-    except Exception as e:
-        print("Log error:", e)
-
-def format_episode_buttons(episodes):
-    buttons = []
-    for ep in sorted(episodes):
-        buttons.append([InlineKeyboardButton(f"Episode {ep}", callback_data=f"ep_{ep}")])
-    return InlineKeyboardMarkup(buttons)
-
-def format_quality_buttons(episode, series, qualities):
-    buttons = []
-    for q in qualities:
-        buttons.append([InlineKeyboardButton(q, callback_data=f"q_{episode}_{series}_{q}")])
-    return InlineKeyboardMarkup(buttons)
+    except:
+        pass
 
 # ---------------- START ----------------
 @app.on_message(filters.private & filters.command("start"))
-async def start_bot(client, message):
+async def start(client, message):
     user = message.from_user
-    users_col.update_one(
+
+    users.update_one(
         {"user_id": user.id},
-        {"$set": {"username": user.username, "start_time": datetime.utcnow()}},
+        {"$set": {
+            "username": user.username,
+            "first_name": user.first_name,
+            "joined": datetime.utcnow()
+        }},
         upsert=True
     )
-    await message.reply(f"👋 Hi {user.first_name}, Welcome to Serial Bot!")
-    await send_log(f"✅ Bot started by @{user.username} ({user.id})")
+
+    total_users = users.count_documents({})
+
+    await message.reply(
+        f"👋 Welcome {user.first_name}\n\n"
+        f"🎬 Send Episode Number like:\n"
+        f"55\nS06E55\nBig Boss Marathi 55\n\n"
+        f"👥 Total Users: {total_users}"
+    )
+
+    await log(f"🆕 New User: @{user.username} ({user.id})")
 
 # ---------------- SEARCH ----------------
 @app.on_message(filters.private & filters.text)
-async def search_episode(client, message):
-    query = message.text.lower().strip()
+async def search(client, message):
+    query = message.text.lower()
 
-    search_msg = await message.reply("🔍 Searching...")
+    searching = await message.reply("🔍 Searching...")
     await asyncio.sleep(1)
-    await search_msg.delete()
+    await searching.delete()
 
     ep_match = re.search(r'\d+', query)
     if not ep_match:
-        await message.reply("❌ Enter episode number like 55 or S06E55")
+        await message.reply("❌ Send valid episode number.")
         return
 
     ep_number = int(ep_match.group())
-    series_name = "big boss marathi"
 
-    episode = episodes_col.find_one({
-        "series": series_name,
-        "episode": ep_number
-    })
-
-    if not episode:
-        await message.reply("❌ Episode not found.")
-        await send_log(f"❌ Search failed for EP {ep_number}")
+    data = episodes.find_one({"episode": ep_number})
+    if not data:
+        await message.reply("❌ Episode Not Found.")
+        await log(f"❌ Episode {ep_number} not found")
         return
+
+    qualities = list(data["qualities"].keys())
+
+    buttons = []
+    for q in qualities:
+        buttons.append([InlineKeyboardButton(q, callback_data=f"q_{ep_number}_{q}")])
 
     await message.reply(
-        "Select Episode 👇",
-        reply_markup=format_episode_buttons([ep_number])
+        f"🎬 Episode {ep_number}\n\nSelect Quality 👇",
+        reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-# ---------------- EPISODE SELECT ----------------
-@app.on_callback_query(filters.regex("^ep_"))
-async def episode_select(client, callback_query):
-    episode = int(callback_query.data.split("_")[1])
-    await callback_query.message.delete()
-
-    ep_data = episodes_col.find_one({
-        "series": "big boss marathi",
-        "episode": episode
-    })
-
-    if not ep_data:
-        await callback_query.message.reply("❌ Episode missing in DB.")
-        return
-
-    qualities = list(ep_data["qualities"].keys())
-
-    await callback_query.message.reply(
-        "Select Quality 👇",
-        reply_markup=format_quality_buttons(
-            episode,
-            ep_data["series"],
-            qualities
-        )
-    )
-
-# ---------------- QUALITY SELECT ----------------
+# ---------------- QUALITY ----------------
 @app.on_callback_query(filters.regex("^q_"))
-async def quality_select(client, callback_query):
+async def quality(client, callback_query):
     data = callback_query.data.split("_")
-    episode = int(data[1])
-    series = data[2]
-    quality = data[3]
+    ep_number = int(data[1])
+    quality = data[2]
 
     await callback_query.message.delete()
 
-    ep_data = episodes_col.find_one({
-        "series": series,
-        "episode": episode
-    })
-
+    ep_data = episodes.find_one({"episode": ep_number})
     if not ep_data:
-        await callback_query.message.reply("❌ Episode not found.")
+        await callback_query.message.reply("❌ Data Missing")
         return
 
-    message_id = ep_data["qualities"].get(quality)
+    msg_id = ep_data["qualities"].get(quality)
 
-    if not message_id:
-        await callback_query.message.reply("❌ Quality not available.")
+    if not msg_id:
+        await callback_query.message.reply("❌ Quality Not Available")
         return
 
-    # 🔥 Forward video from series channel
     await app.copy_message(
         chat_id=callback_query.from_user.id,
         from_chat_id=SERIES_CHANNEL,
-        message_id=message_id
+        message_id=msg_id
     )
 
-# ---------------- AUTO EPISODE STORE ----------------
+# ---------------- AUTO STORE ----------------
 @app.on_message(filters.channel & filters.video)
-async def new_episode_monitor(client, message):
+async def store_episode(client, message):
     if message.chat.id != SERIES_CHANNEL:
         return
 
@@ -153,34 +124,41 @@ async def new_episode_monitor(client, message):
 
     ep_match = re.search(r's?\d*e?(\d+)', caption)
     if not ep_match:
-        await send_log("⚠️ Episode format not detected in caption")
+        await log("⚠️ Episode format not detected")
         return
 
     ep_number = int(ep_match.group(1))
-    series_name = "big boss marathi"
     quality = next((q for q in ["480p","720p","1080p"] if q in caption), "480p")
 
-    existing = episodes_col.find_one({
-        "series": series_name,
-        "episode": ep_number
-    })
+    existing = episodes.find_one({"episode": ep_number})
 
     if existing:
-        episodes_col.update_one(
-            {"series": series_name, "episode": ep_number},
+        episodes.update_one(
+            {"episode": ep_number},
             {"$set": {f"qualities.{quality}": message.id}}
         )
     else:
-        episodes_col.insert_one({
-            "series": series_name,
+        episodes.insert_one({
             "episode": ep_number,
             "qualities": {quality: message.id},
             "added_on": datetime.utcnow()
         })
 
-    await send_log(f"📥 Stored EP {ep_number} {quality}")
+    await log(f"📥 Added Episode {ep_number} ({quality})")
+
+# ---------------- STATS ----------------
+@app.on_message(filters.private & filters.command("stats"))
+async def stats(client, message):
+    total_users = users.count_documents({})
+    total_eps = episodes.count_documents({})
+
+    await message.reply(
+        f"📊 Bot Stats\n\n"
+        f"👥 Users: {total_users}\n"
+        f"🎬 Episodes: {total_eps}"
+    )
 
 # ---------------- RUN ----------------
 if __name__ == "__main__":
-    print("Bot running...")
+    print("🚀 PRO BOT RUNNING...")
     app.run()
